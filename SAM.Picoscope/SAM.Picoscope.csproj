@@ -54,6 +54,8 @@
     <Compile Include="DemoForm.Designer.cs">
       <DependentUpon>DemoForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="MicroStopwatch.cs" />
+    <Compile Include="MicroTimer.cs" />
     <Compile Include="PicoStatus.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
