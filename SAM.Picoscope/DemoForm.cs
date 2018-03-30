@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using PS6000Imports;
 using PS6000PinnedArray;
@@ -18,7 +15,7 @@ namespace SAM.Picoscope
 {
     public partial class DemoForm : Form
     {
-        public const int BUFFER_SIZE = 100000;
+        public const int BUFFER_SIZE = 50000;
         public const int MAX_CHANNELS = 4;
         public const int QUAD_SCOPE = 4;
         public const int DUAL_SCOPE = 2;
@@ -28,7 +25,7 @@ namespace SAM.Picoscope
         bool _scaleVoltages = true;
 
         ushort[] inputRanges = { 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000 };
-        bool _ready = false;
+        bool _ready;
         short _trig = 0;
         uint _trigAt = 0;
         int _sampleCount;
@@ -157,7 +154,8 @@ namespace SAM.Picoscope
 
                 //CollectBlockImmediate();
                 //CollectStreamingTriggered();
-                CollectBlockTriggered();
+                //CollectBlockTriggered();
+                CollectBlockRapid();
                 timerStreamData.Enabled = true;
                 btnGetData.Text = "Stop";
             }
@@ -166,89 +164,72 @@ namespace SAM.Picoscope
                 timerStreamData.Enabled = false;
                 Imports.Stop(_handle);
                 btnGetData.Text = "Get Data";
+
+                if(minPinned!=null)
+                    foreach (PinnedArray<short> p in minPinned.Where(p => p != null))
+                        p.Dispose();
+
+                if(maxPinned != null)
+                    foreach (PinnedArray<short> p in maxPinned.Where(p => p != null))
+                        p.Dispose();
             }
 
         }
 
         private void CollectBlockTriggered()
         {
-            short triggerVoltage = mv_to_adc(1000, (short)_channelSettings[(int)Imports.Channel.ChannelA].range); // ChannelInfo stores ADC counts
+            _cmd = 'T';
+            SetAuxTrigger();
+            BlockDataHandler("Ten readings after trigger", 0);
+        }
 
-            Imports.TriggerChannelProperties[] sourceDetails = new Imports.TriggerChannelProperties[] {
-                new Imports.TriggerChannelProperties(triggerVoltage,
-                                                     256*10,
-                                                     triggerVoltage,
-                                                     256*10,
-                                                     Imports.Channel.Aux,
-                                                     Imports.ThresholdMode.Level)};
+        private void SetAuxTrigger()
+        {
+            short triggerVoltage = mv_to_adc(1000, (short) Imports.Range.Range_5V); // ChannelInfo stores ADC counts
 
-            Imports.TriggerConditions[] conditions = new Imports.TriggerConditions[] {
-                new Imports.TriggerConditions(Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.True,
-                                            Imports.TriggerState.DontCare)};
+            Imports.TriggerChannelProperties[] sourceDetails = new[]
+                                                                   {
+                                                                       new Imports.TriggerChannelProperties(triggerVoltage,
+                                                                                                            256*10,
+                                                                                                            triggerVoltage,
+                                                                                                            256*10,
+                                                                                                            Imports.Channel.Aux,
+                                                                                                            Imports.ThresholdMode.Level)
+                                                                   };
 
-            Imports.ThresholdDirection[] directions = new Imports.ThresholdDirection[]
-	                                        { Imports.ThresholdDirection.Rising,
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.Rising,
-                                            Imports.ThresholdDirection.None };
+            Imports.TriggerConditions[] conditions = new[]
+                                                         {
+                                                             new Imports.TriggerConditions(Imports.TriggerState.DontCare,
+                                                                                           Imports.TriggerState.DontCare,
+                                                                                           Imports.TriggerState.DontCare,
+                                                                                           Imports.TriggerState.DontCare,
+                                                                                           Imports.TriggerState.DontCare,
+                                                                                           Imports.TriggerState.True,
+                                                                                           Imports.TriggerState.DontCare)
+                                                         };
+
+            Imports.ThresholdDirection[] directions = new[]
+                                                          {
+                                                              Imports.ThresholdDirection.Rising,
+                                                              Imports.ThresholdDirection.None,
+                                                              Imports.ThresholdDirection.None,
+                                                              Imports.ThresholdDirection.None,
+                                                              Imports.ThresholdDirection.Rising,
+                                                              Imports.ThresholdDirection.None
+                                                          };
 
             UpdateStatus(string.Format("Collects when value rises past {0}mV",
-                              adc_to_mv(sourceDetails[0].ThresholdMajor,
-                                        (int)_channelSettings[(int)Imports.Channel.ChannelA].range)));
+                                       adc_to_mv(sourceDetails[0].ThresholdMajor, (int) Imports.Range.Range_5V)));
 
             SetDefaults();
 
-            /* Trigger enabled
-             * Rising edge
-             * Threshold = 100mV */
-            SetTrigger(sourceDetails, 1, conditions, 1, directions, null, 0, 0, 0);
-
-            BlockDataHandler("Ten readings after trigger", 0);
+            SetTrigger(sourceDetails, 1, conditions, 1, directions, null, 0, 0, 5000);
         }
 
         private void CollectStreamingTriggered()
         {
             _cmd = 'W';
-            short triggerVoltage = mv_to_adc(1000, (short)_channelSettings[(int)Imports.Channel.ChannelA].range); // ChannelInfo stores ADC counts
-
-            Imports.TriggerChannelProperties[] sourceDetails = new[] {
-                new Imports.TriggerChannelProperties( 
-                    triggerVoltage, 256 * 10, triggerVoltage, 
-                    256 * 10, Imports.Channel.Aux, 
-                    Imports.ThresholdMode.Level)};
-
-            Imports.TriggerConditions[] conditions = new[] {
-              new Imports.TriggerConditions(Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.DontCare,
-                                            Imports.TriggerState.True,
-                                            Imports.TriggerState.DontCare)};
-
-            Imports.ThresholdDirection[] directions = new[]
-	                                        { Imports.ThresholdDirection.None,
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.None, 
-                                            Imports.ThresholdDirection.None,
-                                            Imports.ThresholdDirection.Rising };
-
-            UpdateStatus("Collect streaming triggered...");
-            SetDefaults();
-
-            /* Trigger enabled
-             * Rising edge
-             * Threshold = 100mV */
-            SetTrigger(sourceDetails, 1, conditions, 1, directions, null, 0, 0, 0);
-
+            SetAuxTrigger();
             StreamDataHandler(100000);
         }
 
@@ -282,7 +263,6 @@ namespace SAM.Picoscope
                                  Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, sampleCount);
 
             UpdateStatus("Streaming data...");
-
         }
 
         /****************************************************************************
@@ -466,7 +446,6 @@ namespace SAM.Picoscope
             status = Imports.SetPulseWidthQualifier(_handle, pwq.conditions,
                                                     pwq.nConditions, pwq.direction,
                                                     pwq.lower, pwq.upper, pwq.type);
-
             return status;
         }
         /****************************************************************************
@@ -511,8 +490,7 @@ namespace SAM.Picoscope
             /* Start it collecting, then wait for completion*/
             _ready = false;
             _callbackDelegate = BlockCallback;
-            Imports.RunBlock(_handle, 1000, sampleCount - 1000, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate,
-                             IntPtr.Zero);
+            Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
         }
 
         /****************************************************************************
@@ -537,6 +515,10 @@ namespace SAM.Picoscope
         }
 
         private char _cmd = 'B';
+        private uint nRapidCaptures;
+        private uint numChannels;
+        private uint numSamples;
+
         private void timerStreamData_Tick(object sender, EventArgs e)
         {
             if(btnGetData.Text !="Stop")
@@ -563,7 +545,81 @@ namespace SAM.Picoscope
                 case 'W':   // Triggered streaming
                     PlotStream();
                     break;
+
+                case'T':
+                    uint sampleCount = BUFFER_SIZE;
+                    if (_ready)
+                    {
+                        short overflow;
+                        Imports.GetValues(_handle, 0, ref sampleCount, 1, Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, 0, out overflow);
+
+                        PlotBlock();
+                        int timeIndisposed;
+                        Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
+                    }
+                    break;
+                case 'R':
+                    if(!_ready)
+                        return;
+                    Imports.Stop(_handle);
+
+                    // Set up the data arrays and pin them
+                    var pinned = SetupPinnedDataArrays();
+
+                    // Read the data
+                    short[] overflows = new short[nRapidCaptures];
+
+                    Imports.GetValuesRapid(_handle, ref numSamples, 0, nRapidCaptures - 1, 1, Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, overflows);
+
+                    /* Print out the first 10 readings, converting the readings to mV if required */
+
+                    var pairList = new PointPairList();
+                    for (int i = 0; i < pinned[499].Target.Length; i++)
+                    {
+                        var iVal = adc_to_mv(pinned[499].Target[i], (int)_channelSettings[(int)(Imports.Channel.ChannelA)].range); 
+                        pairList.Add(i,iVal);
+                    }
+
+                    graphData.GraphPane.CurveList.Clear();
+                    graphData.GraphPane.AddCurve("Data", pairList, Color.Blue, SymbolType.None);
+                    graphData.AxisChange();
+                    graphData.Invalidate();
+
+                    _ready = false;
+                    int timeIndispos;
+                    Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndispos, 0, _callbackDelegate, IntPtr.Zero);
+                    // Un-pin the arrays
+                    foreach (PinnedArray<short> p in pinned)
+                    {
+                        if (p != null)
+                            p.Dispose();
+                    }
+                    break;
             }
+        }
+
+        private PinnedArray<short>[] SetupPinnedDataArrays()
+        {
+            short[][] values = new short[nRapidCaptures][];
+            PinnedArray<short>[] pinned = new PinnedArray<short>[nRapidCaptures];
+
+            for (ushort segment = 0; segment < nRapidCaptures; segment++)
+            {
+                values[segment] = new short[numSamples];
+                if (_channelSettings[(int)Imports.Channel.ChannelA].enabled)
+                {
+                    values[segment] = new short[numSamples];
+                    pinned[segment] = new PinnedArray<short>(values[segment]);
+
+                    Imports.SetDataBuffersRapid(_handle,
+                                                Imports.Channel.ChannelA,
+                                                values[segment],
+                                                numSamples,
+                                                segment,
+                                                Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE);
+                }
+            }
+            return pinned;
         }
 
         private void PlotStream()
@@ -787,6 +843,61 @@ namespace SAM.Picoscope
             double fre;
             if (double.TryParse(tbFrequency.Text, out fre))
                 SetSignalGenerator();
+        }
+
+        /****************************************************************************
+       *  CollectBlockRapid
+       *  this function demonstrates how to collect blocks of data
+       * using the RapidCapture function
+       ****************************************************************************/
+        void CollectBlockRapid()
+        {
+            _cmd = 'R';
+            nRapidCaptures = uint.Parse(tbFrequency.Text);
+            Imports.SetNoOfRapidCaptures(_handle, nRapidCaptures);
+
+            uint maxSamples;
+            uint status = Imports.MemorySegments(_handle, nRapidCaptures, out maxSamples);
+            UpdateStatus(status != StatusCodes.PICO_OK ? "Error:" + status : "");
+
+            SetAuxTrigger();
+
+            RapidBlockDataHandler();
+        }
+
+        private const int PRE_TRIG_SAMPLES = 50;
+        /****************************************************************************
+       * RapidBlockDataHandler
+       * - Used by all the CollectBlockRapid routine
+       * - acquires data (user sets trigger mode before calling), displays 10 items
+       * Input :
+       * - nRapidCaptures : the user specified number of blocks to capture
+       ****************************************************************************/
+        private void RapidBlockDataHandler()
+        {
+            numChannels = (uint)_channelCount;
+            numSamples = BUFFER_SIZE;
+
+            // Run the rapid block capture
+            int timeIndisposed;
+            _ready = false;
+
+            // Find the maximum number of samples and the time interval (in nanoseconds), if the timebase index is valid
+            uint maxSamples;
+            var status = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
+            //while (tb != 0)
+            //{
+            //    _timebase = tb;
+            //    tb = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
+            //}
+            _callbackDelegate = BlockCallback;
+
+            status = Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
+
+            if(status != StatusCodes.PICO_OK)
+            {
+                UpdateStatus("Rapid block data setting error");
+            }
         }
     }
 
