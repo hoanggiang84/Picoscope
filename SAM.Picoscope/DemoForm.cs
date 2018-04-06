@@ -153,8 +153,8 @@ namespace SAM.Picoscope
 
                 //CollectBlockImmediate();
                 //CollectStreamingTriggered();
-                //CollectBlockTriggered();
-                CollectBlockRapid();
+                CollectBlockTriggered();
+                //CollectBlockRapid();
 
                 //timerStreamData.Enabled = true;
                 timerCountBlocks.Enabled = true;
@@ -363,8 +363,8 @@ namespace SAM.Picoscope
 
         private void RefreshDataGraph()
         {
-            graphData.GraphPane.XAxis.Title.Text = "Time";
-            graphData.GraphPane.YAxis.Title.Text = "Amplitude";
+            graphData.GraphPane.XAxis.Title.Text = "Time(us)";
+            graphData.GraphPane.YAxis.Title.Text = "Amplitude(mV)";
             //graphData.GraphPane.YAxis.Scale.Max = 600;
             //graphData.GraphPane.YAxis.Scale.Min = -600;
         }
@@ -707,25 +707,27 @@ namespace SAM.Picoscope
                 var pairList = new PointPairList();
                 for (int j = 0; j < maxPinned[ch].Target.Length; j++)
                 {
-                    pairList.Add(j, maxPinned[ch].Target[j]);
+                    double usTime = j/1250.0;
+                    pairList.Add(usTime, adc_to_mv(maxPinned[ch].Target[j], (int)Imports.Range.Range_5V));
                 }
 
                 switch (ch)
                 {
                     case 0:
-                        graphData.GraphPane.AddCurve(string.Format("Channel A"), pairList, Color.Blue, SymbolType.None);
+                        var line = graphData.GraphPane.AddCurve(string.Format("Channel A"), pairList, Color.Blue, SymbolType.None);
+                        line.Line.Width = 2;
                         break;
-                    case 1:
-                        graphData.GraphPane.AddCurve(string.Format("Channel B"), pairList, Color.Red, SymbolType.Circle);
-                        break;
-                    case 2:
-                        graphData.GraphPane.AddCurve(string.Format("Channel C"), pairList, Color.DarkGreen,
-                                                     SymbolType.Square);
-                        break;
-                    case 3:
-                        graphData.GraphPane.AddCurve(string.Format("Channel D"), pairList, Color.DarkGoldenrod,
-                                                     SymbolType.Triangle);
-                        break;
+                    //case 1:
+                    //    graphData.GraphPane.AddCurve(string.Format("Channel B"), pairList, Color.Red, SymbolType.Circle);
+                    //    break;
+                    //case 2:
+                    //    graphData.GraphPane.AddCurve(string.Format("Channel C"), pairList, Color.DarkGreen,
+                    //                                 SymbolType.Square);
+                    //    break;
+                    //case 3:
+                    //    graphData.GraphPane.AddCurve(string.Format("Channel D"), pairList, Color.DarkGoldenrod,
+                    //                                 SymbolType.Triangle);
+                    //    break;
                 }
             }
             graphData.AxisChange();
