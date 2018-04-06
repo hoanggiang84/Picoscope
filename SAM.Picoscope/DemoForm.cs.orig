@@ -153,12 +153,18 @@ namespace SAM.Picoscope
 
                 //CollectBlockImmediate();
                 //CollectStreamingTriggered();
+<<<<<<< origin/master
                 //CollectBlockTriggered();
                 CollectBlockRapid();
 
                 //timerStreamData.Enabled = true;
                 timerCountBlocks.Enabled = true;
                 testsw.Restart();
+=======
+                CollectBlockTriggered();
+                //CollectBlockRapid();
+                timerStreamData.Enabled = true;
+>>>>>>> local
                 btnGetData.Text = "Stop";
             }
             else
@@ -320,7 +326,7 @@ namespace SAM.Picoscope
             uint pkpk = 2000000; // +/- 1V
             Imports.PS6000ExtraOperations operation;
             int offset = 0;
-            double frequency = 120000;//double.Parse(tbFrequency.Text);
+            double frequency = 60000;//double.Parse(tbFrequency.Text);
 
             //Console.WriteLine("Signal Generator\n================\n");
             //Console.WriteLine("0:\tSINE      \t6:\tGAUSSIAN");
@@ -853,7 +859,7 @@ namespace SAM.Picoscope
         void CollectBlockRapid()
         {
             _cmd = 'R';
-            nRapidCaptures = 2500; //uint.Parse(tbFrequency.Text);
+            nRapidCaptures = 2000; //uint.Parse(tbFrequency.Text);
             Imports.SetNoOfRapidCaptures(_handle, nRapidCaptures);
 
             uint maxSamples;
@@ -884,13 +890,14 @@ namespace SAM.Picoscope
 
             // Find the maximum number of samples and the time interval (in nanoseconds), if the timebase index is valid
             uint maxSamples;
-            while (Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0) != 0)
+            var status = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
+            while (status != 0)
             {
-                _timebase++;
+                status = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
             }
             _callbackDelegate = BlockCallback;
 
-            var status = Imports.RunBlock(_handle, 0, BUFFER_SIZE, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
+            status = Imports.RunBlock(_handle, 0, BUFFER_SIZE, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
 
             if(status != StatusCodes.PICO_OK)
             {
@@ -920,23 +927,15 @@ namespace SAM.Picoscope
                 overflows = new short[nRapidCaptures];
                 pinnedArraySet = true;
             }
-            
-            var sw = new Stopwatch();
-            sw.Restart();
+
             // Read the data
             Imports.GetValuesRapid(_handle, ref numSamples, 0, nRapidCaptures - 1, 1, Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, overflows);
 
             _ready = false;
             int timeIndispos;
-            
             Imports.RunBlock(_handle, 0, BUFFER_SIZE, _timebase, _oversample, out timeIndispos, 0, _callbackDelegate, IntPtr.Zero);
-
-            //SetAuxTrigger();
-
-            //RapidBlockDataHandler();
-            sw.Stop();
-            tbStatus.Text = sw.ElapsedMilliseconds.ToString();
-            //// Un-pin the arrays
+            
+            // Un-pin the arrays
             //foreach (PinnedArray<short> p in pinned.Where(p => p != null))
             //    p.Dispose();
             blockCount++;
