@@ -15,7 +15,7 @@ namespace SAM.Picoscope
 {
     public partial class DemoForm : Form
     {
-        public const int BUFFER_SIZE = 50000;
+        public const int BUFFER_SIZE = 1024;
         public const int MAX_CHANNELS = 4;
         public const int QUAD_SCOPE = 4;
         public const int DUAL_SCOPE = 2;
@@ -60,7 +60,6 @@ namespace SAM.Picoscope
                 cbbDevices.Items.Add(serials);
             }
         }
-
 
         private short _handle;
         private int timeInterval;
@@ -156,7 +155,10 @@ namespace SAM.Picoscope
                 //CollectStreamingTriggered();
                 //CollectBlockTriggered();
                 CollectBlockRapid();
-                timerStreamData.Enabled = true;
+
+                //timerStreamData.Enabled = true;
+                timerCountBlocks.Enabled = true;
+                testsw.Restart();
                 btnGetData.Text = "Stop";
             }
             else
@@ -223,7 +225,7 @@ namespace SAM.Picoscope
 
             SetDefaults();
 
-            SetTrigger(sourceDetails, 1, conditions, 1, directions, null, 0, 0, 5000);
+            SetTrigger(sourceDetails, 1, conditions, 1, directions, null, 12500, 0, 5000);
         }
 
         private void CollectStreamingTriggered()
@@ -318,7 +320,7 @@ namespace SAM.Picoscope
             uint pkpk = 2000000; // +/- 1V
             Imports.PS6000ExtraOperations operation;
             int offset = 0;
-            double frequency = double.Parse(tbFrequency.Text);
+            double frequency = 60000;//double.Parse(tbFrequency.Text);
 
             //Console.WriteLine("Signal Generator\n================\n");
             //Console.WriteLine("0:\tSINE      \t6:\tGAUSSIAN");
@@ -502,6 +504,7 @@ namespace SAM.Picoscope
         {
             // flag to say done reading data
             _ready = true;
+            timerCountBlocks.Enabled = true;
         }
 
         /****************************************************************************
@@ -571,8 +574,6 @@ namespace SAM.Picoscope
 
                     Imports.GetValuesRapid(_handle, ref numSamples, 0, nRapidCaptures - 1, 1, Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, overflows);
 
-                    /* Print out the first 10 readings, converting the readings to mV if required */
-
                     var pairList = new PointPairList();
                     for (int i = 0; i < pinned[499].Target.Length; i++)
                     {
@@ -589,11 +590,8 @@ namespace SAM.Picoscope
                     int timeIndispos;
                     Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndispos, 0, _callbackDelegate, IntPtr.Zero);
                     // Un-pin the arrays
-                    foreach (PinnedArray<short> p in pinned)
-                    {
-                        if (p != null)
-                            p.Dispose();
-                    }
+                    foreach (PinnedArray<short> p in pinned.Where(p => p != null))
+                        p.Dispose();
                     break;
             }
         }
@@ -853,7 +851,7 @@ namespace SAM.Picoscope
         void CollectBlockRapid()
         {
             _cmd = 'R';
-            nRapidCaptures = uint.Parse(tbFrequency.Text);
+            nRapidCaptures = 2000; //uint.Parse(tbFrequency.Text);
             Imports.SetNoOfRapidCaptures(_handle, nRapidCaptures);
 
             uint maxSamples;
@@ -885,20 +883,72 @@ namespace SAM.Picoscope
             // Find the maximum number of samples and the time interval (in nanoseconds), if the timebase index is valid
             uint maxSamples;
             var status = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
-            //while (tb != 0)
-            //{
-            //    _timebase = tb;
-            //    tb = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
-            //}
+            while (status != 0)
+            {
+                status = Imports.GetTimebase(_handle, _timebase, numSamples, out timeInterval, _oversample, out maxSamples, 0);
+            }
             _callbackDelegate = BlockCallback;
 
-            status = Imports.RunBlock(_handle, PRE_TRIG_SAMPLES, BUFFER_SIZE - PRE_TRIG_SAMPLES, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
+            status = Imports.RunBlock(_handle, 0, BUFFER_SIZE, _timebase, _oversample, out timeIndisposed, 0, _callbackDelegate, IntPtr.Zero);
 
             if(status != StatusCodes.PICO_OK)
             {
                 UpdateStatus("Rapid block data setting error");
             }
+            testsw.Restart();
         }
+
+        private int blockCount;
+        private Stopwatch testsw = new Stopwatch();
+        private PinnedArray<short>[] pinned;
+        private short[] overflows;
+        private bool pinnedArraySet;
+
+        private void timerCountBlocks_Tick(object sender, EventArgs e)
+        {
+            //timerCountBlocks.Enabled = false;
+            if (!_ready)
+                return;
+            //tbStatus.Text = (++blockCount).ToString();
+            //Imports.Stop(_handle);
+
+            // Set up the data arrays and pin them
+            if(!pinnedArraySet)
+            {
+                pinned = SetupPinnedDataArrays();
+                overflows = new short[nRapidCaptures];
+                pinnedArraySet = true;
+            }
+
+            // Read the data
+            Imports.GetValuesRapid(_handle, ref numSamples, 0, nRapidCaptures - 1, 1, Imports.PS6000DownSampleRatioMode.PS6000_RATIO_MODE_NONE, overflows);
+
+            _ready = false;
+            int timeIndispos;
+            Imports.RunBlock(_handle, 0, BUFFER_SIZE, _timebase, _oversample, out timeIndispos, 0, _callbackDelegate, IntPtr.Zero);
+            
+            // Un-pin the arrays
+            //foreach (PinnedArray<short> p in pinned.Where(p => p != null))
+            //    p.Dispose();
+            blockCount++;
+            if(testsw.ElapsedMilliseconds > 2000)
+            {
+                Imports.Stop(_handle);
+                testsw.Stop();
+                tbStatus.Text = blockCount.ToString();
+                var dt = (double) testsw.ElapsedMilliseconds/1000;
+                var dataFre = blockCount/dt;
+                btnGetData.Text = "Get Data";
+                timerCountBlocks.Enabled = false;
+                pinnedArraySet = false;
+                blockCount = 0;
+                // Un-pin the arrays
+                foreach (PinnedArray<short> p in pinned.Where(p => p != null))
+                    p.Dispose();
+                new Thread(() => MessageBox.Show("Number of B Scan per second: " + dataFre)).Start();
+            }
+        }
+
     }
 
     struct ChannelSettings

@@ -39,6 +39,7 @@
             this.cbbSampleRate = new System.Windows.Forms.ComboBox();
             this.timerStreamData = new System.Windows.Forms.Timer(this.components);
             this.toolTipCommon = new System.Windows.Forms.ToolTip(this.components);
+            this.timerCountBlocks = new System.Windows.Forms.Timer(this.components);
             this.tableLayoutPanelMain.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -50,7 +51,7 @@
             this.tableLayoutPanelMain.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33444F));
             this.tableLayoutPanelMain.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33444F));
             this.tableLayoutPanelMain.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 33.33112F));
-            this.tableLayoutPanelMain.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 37F));
+            this.tableLayoutPanelMain.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 45F));
             this.tableLayoutPanelMain.Controls.Add(this.tbStatus, 2, 6);
             this.tableLayoutPanelMain.Controls.Add(this.cbbDevices, 1, 6);
             this.tableLayoutPanelMain.Controls.Add(this.btnGetData, 1, 1);
@@ -79,7 +80,7 @@
             this.tableLayoutPanelMain.SetColumnSpan(this.tbStatus, 3);
             this.tbStatus.Location = new System.Drawing.Point(123, 392);
             this.tbStatus.Name = "tbStatus";
-            this.tbStatus.Size = new System.Drawing.Size(459, 20);
+            this.tbStatus.Size = new System.Drawing.Size(452, 20);
             this.tbStatus.TabIndex = 1;
             this.tbStatus.Text = "PicoScope 6000 Series Driver Example Program";
             // 
@@ -120,7 +121,7 @@
             this.graphData.ScrollMinX = 0D;
             this.graphData.ScrollMinY = 0D;
             this.graphData.ScrollMinY2 = 0D;
-            this.graphData.Size = new System.Drawing.Size(459, 356);
+            this.graphData.Size = new System.Drawing.Size(452, 356);
             this.graphData.TabIndex = 5;
             this.graphData.UseExtendedPrintDialog = true;
             // 
@@ -183,6 +184,11 @@
             this.timerStreamData.Interval = 10;
             this.timerStreamData.Tick += new System.EventHandler(this.timerStreamData_Tick);
             // 
+            // timerCountBlocks
+            // 
+            this.timerCountBlocks.Interval = 1;
+            this.timerCountBlocks.Tick += new System.EventHandler(this.timerCountBlocks_Tick);
+            // 
             // DemoForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
@@ -211,6 +217,7 @@
         private System.Windows.Forms.Timer timerStreamData;
         private System.Windows.Forms.ToolTip toolTipCommon;
         private System.Windows.Forms.ComboBox cbbSampleRate;
+        private System.Windows.Forms.Timer timerCountBlocks;
     }
 }
 
